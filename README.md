@@ -1,0 +1,230 @@
+# NemoClaw PST Mail Demo
+
+Self-contained NemoClaw/OpenClaw demo that lets an agent inspect a bundled sample Outlook `.pst` mailbox.
+
+This version is built for DGX Spark / GB10 and other Linux ARM hosts. It does not use Outlook, Microsoft 365, Microsoft Graph, OAuth, or Aspose. Instead, it uses Ubuntu's small ARM-native `pst-utils` package and a local read-only PST service.
+
+## What You Get
+
+- A bundled sample mailbox at `data/Outlook.pst`
+- A host-side PST service on port `9003`
+- A sandbox policy that allows OpenClaw to reach only that local PST service
+- An OpenClaw skill that uses `curl` to list folders, count emails, find latest emails, and search by sender or subject
+- A small OpenClaw Node inference fix that trusts the sandbox CA instead of disabling TLS checks
+- Start, stop, dashboard, token, smoke-test, and NemoClaw onboarding scripts
+
+The sample PST is static, so every demo run uses the same mailbox contents:
+
+```text
+Outlook/Inbox: 6 emails
+Outlook/Sent Items: 5 emails
+Grand total: 11 emails
+```
+
+## Before You Begin
+
+Use an Ubuntu host with:
+
+- Docker
+- NVIDIA Container Toolkit
+- Ollama running on port `11434`
+- `git`, `curl`, `python3`, and `sudo`
+- Passwordless sudo for the user running the demo
+
+Pull the local model first:
+
+```bash
+ollama pull nemotron-3-nano:30b
+```
+
+For the cleanest Quick Start, do not keep another NemoClaw sandbox running on the same gateway. If you already have a sandbox from another demo, either use it with `./scripts/start-demo.sh --sandbox <name>` or destroy it before onboarding `pst-agent`.
+
+## Quick Start
+
+```bash
+git clone https://github.com/nv-drollins/nemoclaw-pst.git
+cd nemoclaw-pst
+
+NEMOCLAW_MODEL=nemotron-3-nano:30b ./scripts/onboard-nemoclaw.sh
+./scripts/start-demo.sh
+```
+
+`start-demo.sh` installs `pst-utils` if needed, starts the PST service, applies sandbox policy, installs the PST skill, prepares OpenClaw's Node runtime for the local inference proxy, verifies the PST route from the host and sandbox, and prints the OpenClaw dashboard URL and token.
+
+Open the dashboard URL, paste the token when prompted, then try:
+
+```text
+What folders are in my PST mailbox, and how many emails are in each folder?
+```
+
+Other good prompts:
+
+```text
+Show me the latest 5 emails in the PST mailbox.
+```
+
+```text
+Search the PST mailbox for emails with attachment in the subject.
+```
+
+```text
+Find emails from Saqib in the sample mailbox.
+```
+
+## Running Against An Existing Sandbox
+
+If you already have a NemoClaw sandbox, skip onboarding and pass its name:
+
+```bash
+./scripts/start-demo.sh --sandbox my-existing-sandbox
+```
+
+The default sandbox name for this repo is:
+
+```bash
+pst-agent
+```
+
+## What The Scripts Do
+
+### Onboard NemoClaw
+
+```bash
+NEMOCLAW_MODEL=nemotron-3-nano:30b ./scripts/onboard-nemoclaw.sh
+```
+
+This uses the same hardened local-Ollama onboarding flow as the other GB10 demos. It checks NVIDIA CDI GPU passthrough, avoids the optional model-router pip path that can trigger Python environment errors, and redirects NemoClaw model pulls to the selected `NEMOCLAW_MODEL`.
+
+The wrapper also sets `NEMOCLAW_SANDBOX_READY_TIMEOUT=600` by default because first-run sandbox image upload and startup can take longer than NemoClaw's default 180-second readiness window on a fresh DGX Spark.
+
+### Start The Demo
+
+```bash
+./scripts/start-demo.sh
+```
+
+The script runs:
+
+```bash
+./scripts/install-host-prereqs.sh
+./scripts/start-pst-server.sh
+./scripts/install-pst-skill.sh
+./scripts/prepare-openclaw-node-inference.sh
+./scripts/run-pst-smoke.sh
+./scripts/show-openclaw-dashboard.sh --show-token
+```
+
+`prepare-openclaw-node-inference.sh` extracts the `inference.local` certificate chain from the OpenShell proxy, sets Node to use the sandbox proxy environment, and restarts the in-sandbox OpenClaw gateway with `NODE_EXTRA_CA_CERTS`. This avoids the `LLM request failed: network connection error` path without disabling TLS verification.
+
+### Direct Smoke Checks
+
+```bash
+./scripts/run-pst-smoke.sh
+```
+
+Expected output includes folder counts and two messages matching subject `attachment`.
+
+To also verify that a ready OpenClaw sandbox can reach the host PST service:
+
+```bash
+./scripts/run-pst-smoke.sh --sandbox pst-agent
+```
+
+### Show Dashboard URL And Token
+
+```bash
+./scripts/show-openclaw-dashboard.sh --show-token
+```
+
+Without `--show-token`, the script prints the dashboard URL and the command to retrieve the token.
+
+## Stop And Restart
+
+Stop the PST service:
+
+```bash
+./scripts/stop-demo.sh
+```
+
+Start it again:
+
+```bash
+./scripts/start-demo.sh
+```
+
+This does not destroy the NemoClaw sandbox.
+
+## Using Your Own PST
+
+The bundled sample is used by default. To use another PST file:
+
+```bash
+PST_PATH=/absolute/path/to/mailbox.pst ./scripts/start-demo.sh
+```
+
+Keep the file on the host. The sandbox never receives the PST file; it only calls the local read-only PST service.
+
+## Why Not Aspose?
+
+The upstream `outlook-pst-demo` uses `Aspose.Email-for-Python-via-NET`. That works on Linux x86_64, Windows x64, and macOS, but it does not currently publish a Linux ARM/aarch64 wheel. On DGX Spark / GB10, the dependency resolver reports no compatible wheel.
+
+This repo uses `pst-utils` instead:
+
+```bash
+sudo apt-get install -y pst-utils
+```
+
+On Ubuntu ARM, that package is small and native. It provides `readpst`, which extracts the sample mailbox into mbox files that the local Python service reads with the standard library.
+
+## Sample PST Attribution
+
+The bundled `data/Outlook.pst` sample comes from the Aspose.Email Python examples repository:
+
+```text
+https://github.com/aspose-email/Aspose.Email-Python-Dotnet
+```
+
+The upstream license is included at:
+
+```text
+third_party/Aspose.Email-Python-Dotnet-LICENSE
+```
+
+Sample PST SHA256:
+
+```text
+d2770b20a777098dcaddba8eb1ffa9e1cc6dd75844fcd40769245fcd4ddec416
+```
+
+## Troubleshooting
+
+Check the host service:
+
+```bash
+curl http://127.0.0.1:9003/health
+curl http://127.0.0.1:9003/folders
+```
+
+Check logs:
+
+```bash
+tail -80 logs/pst-server.log
+```
+
+Check NemoClaw:
+
+```bash
+nemoclaw pst-agent status
+```
+
+If OpenClaw cannot reach the PST service, reapply the policy and reinstall the skill:
+
+```bash
+./scripts/install-pst-skill.sh pst-agent
+```
+
+If OpenClaw can reach the PST service but agent prompts fail with `LLM request failed: network connection error`, refresh the Node inference route:
+
+```bash
+./scripts/prepare-openclaw-node-inference.sh pst-agent
+```
