@@ -49,7 +49,7 @@ NEMOCLAW_MODEL=nemotron-3-nano:30b ./scripts/onboard-nemoclaw.sh
 ./scripts/start-demo.sh
 ```
 
-`start-demo.sh` installs `pst-utils` if needed, starts the PST service, applies sandbox policy, installs the PST skill, prepares OpenClaw's Node runtime for the local inference proxy, verifies the PST route from the host and sandbox, and prints the OpenClaw dashboard URL and token.
+`start-demo.sh` installs `pst-utils` if needed, starts the PST service, applies sandbox policy, installs the PST skill, prepares OpenClaw's Node runtime for the local inference proxy, verifies the PST route from the host and sandbox, starts a verified localhost dashboard forward, and prints the OpenClaw dashboard URL and token.
 
 Open the dashboard URL, paste the token when prompted, then try:
 
@@ -136,7 +136,19 @@ To also verify that a ready OpenClaw sandbox can reach the host PST service:
 ./scripts/show-openclaw-dashboard.sh --show-token
 ```
 
-Without `--show-token`, the script prints the dashboard URL and the command to retrieve the token.
+This script repairs the common stale-forward case before it prints the URL. It verifies the dashboard inside the `pst-agent` pod, starts a Kubernetes port-forward inside the OpenShell gateway container, and exposes it through a localhost-only proxy on the host. Without `--show-token`, the script prints the dashboard URL and the command to retrieve the token.
+
+The dashboard is intentionally bound to localhost on the machine running the demo. If your browser is on another machine, first run the SSH tunnel command printed by the script, for example:
+
+```bash
+ssh -N -L 18789:127.0.0.1:18789 nvidia@<spark-ip>
+```
+
+Then open this URL on your browser machine:
+
+```text
+http://127.0.0.1:18789/
+```
 
 ## Stop And Restart
 
@@ -145,6 +157,8 @@ Stop the PST service:
 ```bash
 ./scripts/stop-demo.sh
 ```
+
+This also stops the localhost dashboard forward created by `show-openclaw-dashboard.sh`.
 
 Start it again:
 
