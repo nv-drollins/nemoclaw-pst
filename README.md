@@ -97,6 +97,33 @@ This uses the same hardened local-Ollama onboarding flow as the other GB10 demos
 
 The wrapper also sets `NEMOCLAW_SANDBOX_READY_TIMEOUT=600` by default because first-run sandbox image upload and startup can take longer than NemoClaw's default 180-second readiness window on a fresh DGX Spark.
 
+#### NemoClaw onboarding variables
+
+`scripts/onboard-nemoclaw.sh` is an Ollama-focused wrapper. It always calls the
+official NemoClaw installer with `--non-interactive`,
+`--yes-i-accept-third-party-software`, and `--fresh`.
+
+| Variable | Default | Available options / examples | Purpose |
+|---|---:|---|---|
+| `NEMOCLAW_MODEL` | `nemotron-3-nano:30b` | Any Ollama model name from `ollama list`; examples: `nemotron-3-nano:30b`, `qwen3.6:35b` | Selects the local Ollama model NemoClaw/OpenClaw should use. |
+| `NEMOCLAW_SANDBOX_NAME` | `pst-agent` | Any valid sandbox name, for example `my-pst-agent` | Names the NemoClaw sandbox. Use a unique name to avoid replacing another sandbox. |
+| `NEMOCLAW_POLICY_TIER` | `balanced` | `restricted`, `balanced`, `open` | Selects NemoClaw's baseline policy tier during onboarding. |
+| `NEMOCLAW_LOCAL_INFERENCE_TIMEOUT` | `300` | Seconds, for example `600` | Wait time for local inference validation and model warm-up. |
+| `NEMOCLAW_SANDBOX_READY_TIMEOUT` | `600` | Seconds, for example `900` | Wait time for first-run sandbox image upload and startup. |
+| `NEMOCLAW_OLLAMA_BIN` | auto-detected | Full path to `ollama` | Overrides which real Ollama binary the wrapper calls. |
+| `NEMOCLAW_PIP3_BIN` | auto-detected | Full path to `pip3` | Overrides which real `pip3` binary the router-bypass shim delegates to. |
+
+| Setting | Source | Available options | Notes |
+|---|---|---|---|
+| `--fresh` | Official NemoClaw installer | Always passed by this demo wrapper | Creates a fresh demo-oriented NemoClaw/OpenShell setup. |
+| `--no-fresh` | Not supported by this demo wrapper | N/A | The vanilla repo has this convenience option if you need to preserve an existing setup. |
+| `NEMOCLAW_PROVIDER` | Demo wrapper | `ollama` only | This PST demo is wired for local Ollama inference. |
+
+| Script-set variable | Value | Notes |
+|---|---:|---|
+| `NEMOCLAW_ACCEPT_THIRD_PARTY_SOFTWARE` | `1` | Accepts the official installer's third-party software prompt for non-interactive setup. |
+| `NEMOCLAW_NON_INTERACTIVE` | `1` | Keeps the installer in scripted mode. |
+
 ### Start The Demo
 
 ```bash
