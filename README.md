@@ -31,6 +31,48 @@ Use an Ubuntu host with:
 - `git`, `curl`, `python3`, and `sudo`
 - Passwordless sudo for the user running the demo
 
+### Install and expose Ollama
+
+The NemoClaw sandbox must be able to reach the host Ollama server. Install
+Ollama on the host, then configure the systemd service to listen on all
+interfaces:
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+
+sudo mkdir -p /etc/systemd/system/ollama.service.d
+printf '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"\n' | sudo tee /etc/systemd/system/ollama.service.d/override.conf
+sudo systemctl daemon-reload
+sudo systemctl restart ollama
+```
+
+Verify Ollama is running:
+
+```bash
+curl http://0.0.0.0:11434
+```
+
+Expected response:
+
+```text
+Ollama is running
+```
+
+If it is not running, start it with:
+
+```bash
+sudo systemctl start ollama
+```
+
+Always start Ollama through systemd with `sudo systemctl restart ollama` or
+`sudo systemctl start ollama`. Do not use `ollama serve &` for this demo. A
+manually started Ollama process will not use the `OLLAMA_HOST=0.0.0.0`
+systemd override, and the NemoClaw sandbox will not be able to reach the
+inference server.
+
+`OLLAMA_HOST=0.0.0.0` exposes Ollama on the host network. Use this on a trusted
+local network, or apply host firewall rules appropriate for your environment.
+
 Pull the local model first:
 
 ```bash
