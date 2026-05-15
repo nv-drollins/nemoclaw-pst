@@ -350,6 +350,13 @@ Check NemoClaw:
 nemoclaw pst-agent status
 ```
 
+If PST prompts spin for a long time while simple chat still works, the agent may be stuck retrying a failed tool route. Pull the latest repo and reinstall the PST skill so it uses only the Docker-driver loopback service:
+
+```bash
+git pull
+./scripts/install-pst-skill.sh pst-agent
+```
+
 If OpenClaw cannot reach the PST service, reapply the policy and reinstall the skill:
 
 ```bash
