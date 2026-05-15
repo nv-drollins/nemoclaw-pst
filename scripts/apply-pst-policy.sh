@@ -43,5 +43,31 @@ else
 YAML
 fi
 
+if grep -q "pst_mail_service_docker_host:" "$POLICY_FILE"; then
+  echo "PST Docker-driver host policy already present"
+else
+  cat >> "$POLICY_FILE" <<YAML
+  pst_mail_service_docker_host:
+    name: pst_mail_service_docker_host
+    endpoints:
+    - host: host.docker.internal
+      port: $PORT
+      protocol: rest
+      enforcement: enforce
+      rules:
+      - allow:
+          method: GET
+          path: /**
+      allowed_ips:
+      - '10.0.0.0/8'
+      - '172.16.0.0/12'
+      - '192.168.0.0/16'
+    binaries:
+    - path: /usr/bin/curl
+    - path: /usr/local/bin/node
+    - path: /usr/bin/node
+YAML
+fi
+
 openshell policy set "$SANDBOX" --policy "$POLICY_FILE" --wait
 rm -f "$POLICY_FILE"

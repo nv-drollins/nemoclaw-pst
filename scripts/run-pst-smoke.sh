@@ -66,7 +66,7 @@ if [ "$HOST_ONLY" -eq 0 ] && [ -n "$SANDBOX" ]; then
     fi
 
     docker exec "$sandbox_container" runuser -u sandbox -- \
-      curl -fsS --max-time 15 "http://127.0.0.1:$PORT/folders"
+      curl -fsS --max-time 15 "http://host.docker.internal:$PORT/folders"
     echo
     exit 0
   fi
