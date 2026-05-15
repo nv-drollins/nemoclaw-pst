@@ -158,8 +158,10 @@ if [ -n "$SANDBOX_CONTAINER" ]; then
     exit 1
   fi
 
+  "$SCRIPT_DIR/stop-dashboard-forward.sh" "$SANDBOX" >/dev/null 2>&1 || true
+  recover_docker_driver_dashboard
+
   if [ "$LOCAL_PORT" != "$REMOTE_PORT" ]; then
-    "$SCRIPT_DIR/stop-dashboard-forward.sh" "$SANDBOX" >/dev/null 2>&1 || true
     nohup python3 "$SCRIPT_DIR/dashboard_tcp_proxy.py" \
       --listen-host "$BIND_ADDR" \
       --listen-port "$LOCAL_PORT" \
