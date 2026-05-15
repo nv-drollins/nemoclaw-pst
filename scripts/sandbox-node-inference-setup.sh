@@ -5,6 +5,15 @@ CERT_FILE="${NEMOCLAW_INFERENCE_CA_CERT:-/tmp/nemoclaw-inference-chain.pem}"
 
 source /tmp/nemoclaw-proxy-env.sh 2>/dev/null || true
 
+if [ -z "${HTTPS_PROXY:-${https_proxy:-${HTTP_PROXY:-${http_proxy:-}}}}" ] &&
+   [ -n "${NEMOCLAW_PROXY_HOST:-}" ] &&
+   [ -n "${NEMOCLAW_PROXY_PORT:-}" ]; then
+  export HTTP_PROXY="http://${NEMOCLAW_PROXY_HOST}:${NEMOCLAW_PROXY_PORT}"
+  export HTTPS_PROXY="$HTTP_PROXY"
+  export ALL_PROXY="$HTTP_PROXY"
+  export NO_PROXY="${NO_PROXY:-localhost,127.0.0.1,::1,${NEMOCLAW_PROXY_HOST}}"
+fi
+
 restart_gateway() {
   local gateway_pids
   gateway_pids="$(ps -eo pid=,comm= | awk '$2 == "openclaw-gatewa" { print $1 }')"
