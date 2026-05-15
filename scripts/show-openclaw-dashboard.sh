@@ -66,6 +66,38 @@ wait_for_dashboard() {
   return 1
 }
 
+docker_driver_dashboard_ready() {
+  local container="$1"
+  docker exec "$container" \
+    curl -fsS --max-time 3 "http://127.0.0.1:${REMOTE_PORT}/" \
+    >/dev/null 2>&1
+}
+
+recover_docker_driver_dashboard() {
+  echo "Recovering OpenClaw gateway forward..."
+  nemoclaw "$SANDBOX" connect --probe-only >/dev/null 2>&1 || true
+}
+
+wait_for_docker_driver_dashboard() {
+  local container="$1"
+  local i
+
+  for i in $(seq 1 30); do
+    if docker_driver_dashboard_ready "$container"; then
+      return 0
+    fi
+
+    if [ "$i" -eq 1 ]; then
+      recover_docker_driver_dashboard
+    fi
+
+    sleep 1
+  done
+
+  echo "OpenClaw dashboard is not responding inside sandbox '$SANDBOX'." >&2
+  return 1
+}
+
 gateway_container_ip() {
   docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' openshell-cluster-nemoclaw
 }
@@ -122,9 +154,7 @@ start_host_proxy() {
 echo "OpenClaw dashboard:"
 SANDBOX_CONTAINER="$(sandbox_container)"
 if [ -n "$SANDBOX_CONTAINER" ]; then
-  if ! docker exec "$SANDBOX_CONTAINER" \
-    curl -fsS --max-time 10 "http://127.0.0.1:${REMOTE_PORT}/" >/dev/null; then
-    echo "OpenClaw dashboard is not responding inside sandbox '$SANDBOX'." >&2
+  if ! wait_for_docker_driver_dashboard "$SANDBOX_CONTAINER"; then
     exit 1
   fi
 

@@ -6,6 +6,8 @@ SANDBOX="${1:-${NEMOCLAW_SANDBOX_NAME:-pst-agent}}"
 LOCAL_PORT="${OPENCLAW_DASHBOARD_LOCAL_PORT:-18789}"
 GATEWAY_PORT="${OPENCLAW_DASHBOARD_GATEWAY_PORT:-18089}"
 
+export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
+
 has_docker_driver_sandbox() {
   command -v docker >/dev/null 2>&1 || return 1
   docker ps \
@@ -18,15 +20,28 @@ has_docker_driver_sandbox() {
 stop_host_processes() {
   local pids
 
-  if has_docker_driver_sandbox && [ "$LOCAL_PORT" = "18789" ]; then
-    :
-  elif command -v lsof >/dev/null 2>&1; then
+  if command -v openshell >/dev/null 2>&1; then
+    openshell forward stop "$LOCAL_PORT" >/dev/null 2>&1 || true
+  fi
+
+  pids="$(
+    ps -eo pid=,args= |
+      awk -v port="$LOCAL_PORT" '
+        $0 ~ /ssh/ && $0 ~ /openshell ssh-proxy/ && $0 ~ ("-L 127.0.0.1:" port ":") { print $1 }
+      '
+  )"
+  if [ -n "$pids" ]; then
+    # shellcheck disable=SC2086
+    kill $pids 2>/dev/null || true
+  fi
+
+  if ! has_docker_driver_sandbox && command -v lsof >/dev/null 2>&1; then
     pids="$(lsof -tiTCP:"$LOCAL_PORT" -sTCP:LISTEN 2>/dev/null || true)"
     if [ -n "$pids" ]; then
       # shellcheck disable=SC2086
       kill $pids 2>/dev/null || true
     fi
-  elif command -v fuser >/dev/null 2>&1; then
+  elif ! has_docker_driver_sandbox && command -v fuser >/dev/null 2>&1; then
     fuser -k "${LOCAL_PORT}/tcp" >/dev/null 2>&1 || true
   fi
 
