@@ -16,6 +16,14 @@ else
   pst_mail_service:
     name: pst_mail_service
     endpoints:
+    - host: 127.0.0.1
+      port: $PORT
+      protocol: rest
+      enforcement: enforce
+      rules:
+      - allow:
+          method: GET
+          path: /**
     - host: host.openshell.internal
       port: $PORT
       protocol: rest

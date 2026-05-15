@@ -9,6 +9,10 @@ PID_FILE="$ROOT/logs/pst-server.pid"
 
 "$SCRIPT_DIR/stop-dashboard-forward.sh" "${NEMOCLAW_SANDBOX_NAME:-pst-agent}" >/dev/null 2>&1 || true
 
+if [ "${PST_KEEP_VLLM:-0}" != "1" ]; then
+  "$SCRIPT_DIR/stop-vllm.sh" >/dev/null 2>&1 || true
+fi
+
 if [ -f "$PID_FILE" ]; then
   pid="$(cat "$PID_FILE" 2>/dev/null || true)"
   if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then

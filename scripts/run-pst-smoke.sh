@@ -52,7 +52,22 @@ if [ "$HOST_ONLY" -eq 0 ] && [ -n "$SANDBOX" ]; then
   fi
 
   if ! docker inspect openshell-cluster-nemoclaw >/dev/null 2>&1; then
-    echo "Skipping sandbox route check: OpenShell gateway container not found." >&2
+    sandbox_container="$(
+      docker ps \
+        --filter "label=openshell.ai/sandbox-name=$SANDBOX" \
+        --filter "label=openshell.ai/managed-by=openshell" \
+        --format '{{.Names}}' |
+        head -n 1
+    )"
+
+    if [ -z "$sandbox_container" ]; then
+      echo "Skipping sandbox route check: OpenShell sandbox container not found." >&2
+      exit 0
+    fi
+
+    docker exec "$sandbox_container" runuser -u sandbox -- \
+      curl -fsS --max-time 15 "http://127.0.0.1:$PORT/folders"
+    echo
     exit 0
   fi
 

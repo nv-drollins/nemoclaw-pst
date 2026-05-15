@@ -70,6 +70,14 @@ gateway_container_ip() {
   docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' openshell-cluster-nemoclaw
 }
 
+sandbox_container() {
+  docker ps \
+    --filter "label=openshell.ai/sandbox-name=$SANDBOX" \
+    --filter "label=openshell.ai/managed-by=openshell" \
+    --format '{{.Names}}' |
+    head -n 1
+}
+
 wait_for_gateway_forward() {
   local ip="$1"
   local url="http://${ip}:${GATEWAY_PORT}/"
@@ -112,6 +120,54 @@ start_host_proxy() {
 }
 
 echo "OpenClaw dashboard:"
+SANDBOX_CONTAINER="$(sandbox_container)"
+if [ -n "$SANDBOX_CONTAINER" ]; then
+  if ! docker exec "$SANDBOX_CONTAINER" \
+    curl -fsS --max-time 10 "http://127.0.0.1:${REMOTE_PORT}/" >/dev/null; then
+    echo "OpenClaw dashboard is not responding inside sandbox '$SANDBOX'." >&2
+    exit 1
+  fi
+
+  if [ "$LOCAL_PORT" != "$REMOTE_PORT" ]; then
+    "$SCRIPT_DIR/stop-dashboard-forward.sh" "$SANDBOX" >/dev/null 2>&1 || true
+    nohup python3 "$SCRIPT_DIR/dashboard_tcp_proxy.py" \
+      --listen-host "$BIND_ADDR" \
+      --listen-port "$LOCAL_PORT" \
+      --target-host 127.0.0.1 \
+      --target-port "$REMOTE_PORT" \
+      >/tmp/"${SANDBOX}-dashboard-proxy.log" 2>&1 &
+  fi
+
+  wait_for_dashboard
+
+  cat <<EOF
+Dashboard URL: http://127.0.0.1:${LOCAL_PORT}/
+Forward: Docker-driver host network -> ${SANDBOX}:127.0.0.1:${REMOTE_PORT}
+Browser launch disabled (--no-open). Use the URL above on this host.
+
+If your browser is on another machine, run this there first:
+  ssh -N -L ${LOCAL_PORT}:127.0.0.1:${LOCAL_PORT} $(id -un)@$(hostname -I 2>/dev/null | awk '{print $1}')
+
+Then open:
+  http://127.0.0.1:${LOCAL_PORT}/
+EOF
+
+  echo
+  if [ "$SHOW_TOKEN" -eq 1 ]; then
+    echo "Gateway token:"
+    nemoclaw "$SANDBOX" gateway-token --quiet
+  else
+    cat <<EOF
+Gateway token:
+  nemoclaw $SANDBOX gateway-token --quiet
+
+To print the token now:
+  ./scripts/show-openclaw-dashboard.sh --sandbox $SANDBOX --show-token
+EOF
+  fi
+  exit 0
+fi
+
 if ! docker inspect openshell-cluster-nemoclaw >/dev/null 2>&1; then
   echo "OpenShell gateway container openshell-cluster-nemoclaw was not found." >&2
   exit 1

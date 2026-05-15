@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 SANDBOX="${NEMOCLAW_SANDBOX_NAME:-pst-agent}"
 MODEL="${NEMOCLAW_MODEL:-nemotron-3-nano:30b}"
+PROVIDER="${NEMOCLAW_PROVIDER:-vllm}"
 OLLAMA_WRAPPER_DIR="$(mktemp -d)"
 
 drop_path_entry() {
@@ -82,6 +83,33 @@ ensure_nvidia_cdi_specs() {
     exit 1
   fi
 }
+
+if [ "$PROVIDER" = "vllm" ]; then
+  bash "$SCRIPT_DIR/ensure-sudo.sh"
+  ensure_nvidia_cdi_specs
+  "$SCRIPT_DIR/start-vllm.sh"
+
+  export NEMOCLAW_EXPERIMENTAL=1
+  export NEMOCLAW_PROVIDER=vllm
+  export NEMOCLAW_MODEL="${PST_VLLM_SERVED_MODEL_NAME:-model}"
+  export NEMOCLAW_SANDBOX_NAME="$SANDBOX"
+  export NEMOCLAW_POLICY_TIER="${NEMOCLAW_POLICY_TIER:-balanced}"
+  export NEMOCLAW_ACCEPT_THIRD_PARTY_SOFTWARE=1
+  export NEMOCLAW_NON_INTERACTIVE=1
+  export NEMOCLAW_PREFERRED_API="${NEMOCLAW_PREFERRED_API:-chat-completions}"
+  export NEMOCLAW_LOCAL_INFERENCE_TIMEOUT="${NEMOCLAW_LOCAL_INFERENCE_TIMEOUT:-600}"
+  export NEMOCLAW_SANDBOX_READY_TIMEOUT="${NEMOCLAW_SANDBOX_READY_TIMEOUT:-600}"
+
+  echo "Onboarding sandbox '$SANDBOX' with local vLLM model '${NEMOCLAW_MODEL}'"
+  curl -fsSL https://www.nvidia.com/nemoclaw.sh -o /tmp/nemoclaw.sh
+  bash /tmp/nemoclaw.sh --non-interactive --yes-i-accept-third-party-software --fresh
+  exit 0
+fi
+
+if [ "$PROVIDER" != "ollama" ]; then
+  echo "Unsupported NEMOCLAW_PROVIDER='$PROVIDER'. Use 'vllm' or 'ollama'." >&2
+  exit 2
+fi
 
 cat >"$OLLAMA_WRAPPER_DIR/ollama" <<'EOF'
 #!/usr/bin/env bash

@@ -11,6 +11,7 @@ usage() {
 Usage: $0 [--sandbox NAME] [--no-smoke] [--no-token]
 
 Starts the self-contained NemoClaw PST demo:
+  - starts the local vLLM endpoint if this repo manages it
   - installs host pst-utils if needed
   - starts the bundled sample PST service
   - applies sandbox egress policy
@@ -42,16 +43,23 @@ done
 export NEMOCLAW_SANDBOX_NAME="$SANDBOX"
 export PATH="$HOME/.local/bin:$HOME/.npm-global/bin:$PATH"
 
-echo "[1/5] Checking host prerequisites"
+echo "[1/6] Checking host prerequisites"
 "$SCRIPT_DIR/install-host-prereqs.sh"
 
-echo "[2/5] Starting PST service"
+if [ "${NEMOCLAW_PROVIDER:-vllm}" != "ollama" ]; then
+  echo "[2/6] Ensuring local vLLM inference"
+  "$SCRIPT_DIR/start-vllm.sh"
+else
+  echo "[2/6] Skipping vLLM because NEMOCLAW_PROVIDER=ollama"
+fi
+
+echo "[3/6] Starting PST service"
 "$SCRIPT_DIR/start-pst-server.sh"
 
-echo "[3/5] Installing PST skill and policy"
+echo "[4/6] Installing PST skill and policy"
 "$SCRIPT_DIR/install-pst-skill.sh" "$SANDBOX"
 
-echo "[4/5] Preparing OpenClaw Node inference route"
+echo "[5/6] Preparing OpenClaw Node inference route"
 "$SCRIPT_DIR/prepare-openclaw-node-inference.sh" "$SANDBOX"
 
 if [ "$RUN_SMOKE" -eq 1 ]; then
@@ -61,7 +69,7 @@ if [ "$RUN_SMOKE" -eq 1 ]; then
 fi
 
 echo
-echo "[5/5] OpenClaw dashboard"
+echo "[6/6] OpenClaw dashboard"
 if [ "$SHOW_TOKEN" -eq 1 ]; then
   "$SCRIPT_DIR/show-openclaw-dashboard.sh" --sandbox "$SANDBOX" --show-token
 else

@@ -35,9 +35,9 @@ Use an Ubuntu host with:
 
 - Docker
 - NVIDIA Container Toolkit
-- Ollama running on port `11434`
+- Hugging Face access through `HF_TOKEN`
 - `git`, `curl`, `python3`, and `sudo`
-- Passwordless sudo for the user running the demo
+- An interactive terminal for sudo prompts
 
 ### Enable Docker access without sudo
 
@@ -77,77 +77,26 @@ Optional verification:
 sudo docker run --rm --runtime=nvidia --gpus all ubuntu nvidia-smi
 ```
 
-### Install and expose Ollama
+### Local vLLM Inference
 
-The NemoClaw sandbox must be able to reach the host Ollama server. Install
-Ollama on the host, then configure the systemd service to listen on all
-interfaces. **Important for DGX Spark / GB10: pin Ollama to `0.22.1`; newer
-`0.23.x` builds have been observed to fall back to CPU-only execution on GB10.**
+This demo now defaults to local vLLM instead of Ollama. Recent NemoClaw builds
+validate that local inference returns structured `tool_calls`; Ollama can return
+tool calls as plain assistant text, which blocks onboarding for tool-heavy
+OpenClaw demos.
 
-```bash
-OLLAMA_VERSION=0.22.1
-OLLAMA_ARCH="$(case "$(uname -m)" in aarch64|arm64) echo arm64 ;; x86_64|amd64) echo amd64 ;; *) uname -m ;; esac)"
-curl -fL --show-error -o "/tmp/ollama-linux-${OLLAMA_ARCH}.tar.zst" \
-  "https://github.com/ollama/ollama/releases/download/v${OLLAMA_VERSION}/ollama-linux-${OLLAMA_ARCH}.tar.zst"
-sudo useradd -r -s /bin/false -U -m -d /usr/share/ollama ollama 2>/dev/null || true
-sudo usermod -a -G video,render ollama 2>/dev/null || true
-sudo tar --zstd -xf "/tmp/ollama-linux-${OLLAMA_ARCH}.tar.zst" -C /usr/local
-sudo chmod -R a+rX /usr/local/lib/ollama
-sudo tee /etc/systemd/system/ollama.service >/dev/null <<'EOF'
-[Unit]
-Description=Ollama Service
-After=network-online.target
+The onboarding script starts `vllm/vllm-openai:v0.20.0` on port `8000` with
+NVIDIA Nemotron 3 Nano FP8 and the parser flags required for structured tool
+calls. First start downloads the model from Hugging Face and can take a while.
 
-[Service]
-ExecStart=/usr/local/bin/ollama serve
-User=ollama
-Group=ollama
-Restart=always
-RestartSec=3
-Environment="PATH=/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
-[Install]
-WantedBy=default.target
-EOF
-
-sudo mkdir -p /etc/systemd/system/ollama.service.d
-printf '[Service]\nEnvironment="OLLAMA_HOST=0.0.0.0"\n' | sudo tee /etc/systemd/system/ollama.service.d/override.conf
-sudo systemctl daemon-reload
-sudo systemctl restart ollama
-```
-
-Verify Ollama is running:
+Make sure your Hugging Face token is available:
 
 ```bash
-curl http://0.0.0.0:11434
+test -n "${HF_TOKEN:-}" && echo "HF_TOKEN is set"
 ```
 
-Expected response:
-
-```text
-Ollama is running
-```
-
-If it is not running, start it with:
-
-```bash
-sudo systemctl start ollama
-```
-
-Always start Ollama through systemd with `sudo systemctl restart ollama` or
-`sudo systemctl start ollama`. Do not use `ollama serve &` for this demo. A
-manually started Ollama process will not use the `OLLAMA_HOST=0.0.0.0`
-systemd override, and the NemoClaw sandbox will not be able to reach the
-inference server.
-
-`OLLAMA_HOST=0.0.0.0` exposes Ollama on the host network. Use this on a trusted
-local network, or apply host firewall rules appropriate for your environment.
-
-Pull the local model first:
-
-```bash
-ollama pull nemotron-3-nano:30b
-```
+If model download fails with an authorization or terms error, accept the model
+terms on Hugging Face for `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8`, then run
+the onboarding command again.
 
 For the cleanest Quick Start, do not keep another NemoClaw sandbox running on the same gateway. If you already have a sandbox from another demo, either use it with `./scripts/start-demo.sh --sandbox <name>` or destroy it before onboarding `pst-agent`.
 
@@ -157,7 +106,7 @@ For the cleanest Quick Start, do not keep another NemoClaw sandbox running on th
 git clone https://github.com/nv-drollins/nemoclaw-pst.git
 cd nemoclaw-pst
 
-NEMOCLAW_MODEL=nemotron-3-nano:30b ./scripts/onboard-nemoclaw.sh
+./scripts/onboard-nemoclaw.sh
 ./scripts/start-demo.sh
 ```
 
@@ -202,34 +151,38 @@ pst-agent
 ### Onboard NemoClaw
 
 ```bash
-NEMOCLAW_MODEL=nemotron-3-nano:30b ./scripts/onboard-nemoclaw.sh
+./scripts/onboard-nemoclaw.sh
 ```
 
-This uses the same hardened local-Ollama onboarding flow as the other GB10 demos. It checks NVIDIA CDI GPU passthrough, avoids the optional model-router pip path that can trigger Python environment errors, and redirects NemoClaw model pulls to the selected `NEMOCLAW_MODEL`.
+This starts or reuses a local vLLM container, checks NVIDIA CDI GPU passthrough,
+and runs the official NemoClaw installer in non-interactive mode. NemoClaw is
+configured with `NEMOCLAW_PROVIDER=vllm` and the local model server at
+`http://127.0.0.1:8000/v1`.
 
 The wrapper also sets `NEMOCLAW_SANDBOX_READY_TIMEOUT=600` by default because first-run sandbox image upload and startup can take longer than NemoClaw's default 180-second readiness window on a fresh DGX Spark.
 
 #### NemoClaw onboarding variables
 
-`scripts/onboard-nemoclaw.sh` is an Ollama-focused wrapper. It always calls the
+`scripts/onboard-nemoclaw.sh` is a vLLM-focused wrapper. It always calls the
 official NemoClaw installer with `--non-interactive`,
 `--yes-i-accept-third-party-software`, and `--fresh`.
 
 | Variable | Default | Available options / examples | Purpose |
 |---|---:|---|---|
-| `NEMOCLAW_MODEL` | `nemotron-3-nano:30b` | Any Ollama model name from `ollama list`; examples: `nemotron-3-nano:30b`, `qwen3.6:35b` | Selects the local Ollama model NemoClaw/OpenClaw should use. |
+| `PST_VLLM_MODEL_ID` | `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-FP8` | Any compatible Hugging Face model ID | Selects the model vLLM serves. |
+| `PST_VLLM_SERVED_MODEL_NAME` | `model` | Any OpenAI-compatible served model name | Selects the model name NemoClaw/OpenClaw uses. |
+| `PST_VLLM_PORT` | `8000` | TCP port | Host port for local vLLM. |
+| `PST_VLLM_MAX_MODEL_LEN` | `65536` | Token count | vLLM context length. Increase if your PST workload needs more context. |
 | `NEMOCLAW_SANDBOX_NAME` | `pst-agent` | Any valid sandbox name, for example `my-pst-agent` | Names the NemoClaw sandbox. Use a unique name to avoid replacing another sandbox. |
 | `NEMOCLAW_POLICY_TIER` | `balanced` | `restricted`, `balanced`, `open` | Selects NemoClaw's baseline policy tier during onboarding. |
-| `NEMOCLAW_LOCAL_INFERENCE_TIMEOUT` | `300` | Seconds, for example `600` | Wait time for local inference validation and model warm-up. |
+| `NEMOCLAW_LOCAL_INFERENCE_TIMEOUT` | `600` | Seconds, for example `900` | Wait time for local inference validation and model warm-up. |
 | `NEMOCLAW_SANDBOX_READY_TIMEOUT` | `600` | Seconds, for example `900` | Wait time for first-run sandbox image upload and startup. |
-| `NEMOCLAW_OLLAMA_BIN` | auto-detected | Full path to `ollama` | Overrides which real Ollama binary the wrapper calls. |
-| `NEMOCLAW_PIP3_BIN` | auto-detected | Full path to `pip3` | Overrides which real `pip3` binary the router-bypass shim delegates to. |
 
 | Setting | Source | Available options | Notes |
 |---|---|---|---|
 | `--fresh` | Official NemoClaw installer | Always passed by this demo wrapper | Creates a fresh demo-oriented NemoClaw/OpenShell setup. |
 | `--no-fresh` | Not supported by this demo wrapper | N/A | The vanilla repo has this convenience option if you need to preserve an existing setup. |
-| `NEMOCLAW_PROVIDER` | Demo wrapper | `ollama` only | This PST demo is wired for local Ollama inference. |
+| `NEMOCLAW_PROVIDER` | Demo wrapper | `vllm`, `ollama` | Default is `vllm`. The legacy Ollama path is kept only as an explicit fallback. |
 
 | Script-set variable | Value | Notes |
 |---|---:|---|
@@ -246,6 +199,7 @@ The script runs:
 
 ```bash
 ./scripts/install-host-prereqs.sh
+./scripts/start-vllm.sh
 ./scripts/start-pst-server.sh
 ./scripts/install-pst-skill.sh
 ./scripts/prepare-openclaw-node-inference.sh
@@ -275,7 +229,7 @@ To also verify that a ready OpenClaw sandbox can reach the host PST service:
 ./scripts/show-openclaw-dashboard.sh --show-token
 ```
 
-This script repairs the common stale-forward case before it prints the URL. It verifies the dashboard inside the `pst-agent` pod, starts a Kubernetes port-forward inside the OpenShell gateway container, and exposes it through a localhost-only proxy on the host. Without `--show-token`, the script prints the dashboard URL and the command to retrieve the token.
+This script handles both current Docker-driver sandboxes and older gateway/pod sandboxes. In Docker-driver mode the dashboard is already exposed through the sandbox host network; in older gateway mode the script repairs the common stale-forward case before it prints the URL. Without `--show-token`, the script prints the dashboard URL and the command to retrieve the token.
 
 The dashboard is intentionally bound to localhost on the machine running the demo. If your browser is on another machine, first run the SSH tunnel command printed by the script, for example:
 
@@ -291,13 +245,18 @@ http://127.0.0.1:18789/
 
 ## Stop And Restart
 
-Stop the PST service:
+Stop the PST service, dashboard forward, and repo-managed vLLM container:
 
 ```bash
 ./scripts/stop-demo.sh
 ```
 
-This also stops the localhost dashboard forward created by `show-openclaw-dashboard.sh`.
+Set `PST_KEEP_VLLM=1` if you want to keep the vLLM container warm between demo
+runs:
+
+```bash
+PST_KEEP_VLLM=1 ./scripts/stop-demo.sh
+```
 
 Start it again:
 

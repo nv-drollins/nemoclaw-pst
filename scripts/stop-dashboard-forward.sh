@@ -6,10 +6,21 @@ SANDBOX="${1:-${NEMOCLAW_SANDBOX_NAME:-pst-agent}}"
 LOCAL_PORT="${OPENCLAW_DASHBOARD_LOCAL_PORT:-18789}"
 GATEWAY_PORT="${OPENCLAW_DASHBOARD_GATEWAY_PORT:-18089}"
 
+has_docker_driver_sandbox() {
+  command -v docker >/dev/null 2>&1 || return 1
+  docker ps \
+    --filter "label=openshell.ai/sandbox-name=$SANDBOX" \
+    --filter "label=openshell.ai/managed-by=openshell" \
+    --format '{{.Names}}' |
+    grep -q .
+}
+
 stop_host_processes() {
   local pids
 
-  if command -v lsof >/dev/null 2>&1; then
+  if has_docker_driver_sandbox && [ "$LOCAL_PORT" = "18789" ]; then
+    :
+  elif command -v lsof >/dev/null 2>&1; then
     pids="$(lsof -tiTCP:"$LOCAL_PORT" -sTCP:LISTEN 2>/dev/null || true)"
     if [ -n "$pids" ]; then
       # shellcheck disable=SC2086
