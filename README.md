@@ -31,6 +31,28 @@ Use an Ubuntu host with:
 - `git`, `curl`, `python3`, and `sudo`
 - Passwordless sudo for the user running the demo
 
+### Enable Docker access without sudo
+
+DGX Spark systems may not add the current user to the `docker` group by
+default. If you skip this step, run Docker commands with `sudo`.
+
+Open a new terminal and test Docker access:
+
+```bash
+docker ps
+```
+
+If you see a permission denied error while connecting to the Docker daemon
+socket, add your user to the `docker` group:
+
+```bash
+sudo usermod -aG docker "$USER"
+newgrp docker
+```
+
+`newgrp docker` updates group membership for the current shell. You can also
+log out and back in, then rerun `docker ps`.
+
 ### Configure Docker GPU runtime
 
 DGX Spark systems may include the NVIDIA Container Toolkit out of the box, but
