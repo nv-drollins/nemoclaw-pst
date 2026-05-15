@@ -4,6 +4,14 @@ Self-contained NemoClaw/OpenClaw demo that lets an agent inspect a bundled sampl
 
 This version is built for DGX Spark / GB10 and other Linux ARM hosts. It does not use Outlook, Microsoft 365, Microsoft Graph, OAuth, or Aspose. Instead, it uses Ubuntu's small ARM-native `pst-utils` package and a local read-only PST service.
 
+## Sudo Prompts
+
+First-time setup may need sudo for host packages, Docker/NVIDIA toolkit configuration, or setup preflight checks. Passwordless sudo is not required, but install commands must run from an interactive terminal so sudo can prompt. When installing over SSH, use:
+
+```bash
+ssh -t nvidia@<spark-ip>
+```
+
 ## What You Get
 
 - A bundled sample mailbox at `data/Outlook.pst`
