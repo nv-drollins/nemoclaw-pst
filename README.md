@@ -175,6 +175,7 @@ official NemoClaw installer with `--non-interactive`,
 | `PST_VLLM_MAX_MODEL_LEN` | `65536` | Token count | vLLM context length. Increase if your PST workload needs more context. |
 | `NEMOCLAW_SANDBOX_NAME` | `pst-agent` | Any valid sandbox name, for example `my-pst-agent` | Names the NemoClaw sandbox. Use a unique name to avoid replacing another sandbox. |
 | `NEMOCLAW_POLICY_TIER` | `balanced` | `restricted`, `balanced`, `open` | Selects NemoClaw's baseline policy tier during onboarding. |
+| `NEMOCLAW_INSTALL_REF` | unset (latest) | `v0.0.38`, `v0.0.43`, or another published installer ref | Pins the official NemoClaw installer for repeatable demo testing. Leave unset for latest. |
 | `NEMOCLAW_LOCAL_INFERENCE_TIMEOUT` | `600` | Seconds, for example `900` | Wait time for local inference validation and model warm-up. |
 | `NEMOCLAW_SANDBOX_READY_TIMEOUT` | `600` | Seconds, for example `900` | Wait time for first-run sandbox image upload and startup. |
 
@@ -309,6 +310,26 @@ d2770b20a777098dcaddba8eb1ffa9e1cc6dd75844fcd40769245fcd4ddec416
 ```
 
 ## Troubleshooting
+
+### Version pinning and diagnostics
+
+Leave `NEMOCLAW_INSTALL_REF` unset for the current NemoClaw installer. To compare against the older lane that previously worked for some demos, prefix onboarding:
+
+```bash
+NEMOCLAW_INSTALL_REF=v0.0.38 ./scripts/onboard-nemoclaw.sh
+```
+
+The PST demo has also been tested with `v0.0.38` as a comparison point. That install path completed, but the remaining TUI/agent connection issue still appeared in the OpenClaw gateway path, so use the pin for reproduction and debugging rather than as the default fix.
+
+Check the installed stack before debugging a sandbox issue:
+
+```bash
+nemoclaw --version
+openshell --version
+nemoclaw pst-agent status
+docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+curl http://127.0.0.1:8000/v1/models
+```
 
 Check the host service:
 

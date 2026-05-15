@@ -6,6 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SANDBOX="${NEMOCLAW_SANDBOX_NAME:-pst-agent}"
 MODEL="${NEMOCLAW_MODEL:-nemotron-3-nano:30b}"
 PROVIDER="${NEMOCLAW_PROVIDER:-vllm}"
+INSTALL_REF="${NEMOCLAW_INSTALL_REF:-latest}"
 OLLAMA_WRAPPER_DIR="$(mktemp -d)"
 
 drop_path_entry() {
@@ -101,6 +102,7 @@ if [ "$PROVIDER" = "vllm" ]; then
   export NEMOCLAW_SANDBOX_READY_TIMEOUT="${NEMOCLAW_SANDBOX_READY_TIMEOUT:-600}"
 
   echo "Onboarding sandbox '$SANDBOX' with local vLLM model '${NEMOCLAW_MODEL}'"
+  echo "NemoClaw installer ref: ${INSTALL_REF}"
   curl -fsSL https://www.nvidia.com/nemoclaw.sh -o /tmp/nemoclaw.sh
   bash /tmp/nemoclaw.sh --non-interactive --yes-i-accept-third-party-software --fresh
   exit 0
@@ -211,5 +213,6 @@ bash "$SCRIPT_DIR/ensure-sudo.sh"
 ensure_nvidia_cdi_specs
 
 echo "Onboarding sandbox '$SANDBOX' with Ollama model '$MODEL'"
+echo "NemoClaw installer ref: ${INSTALL_REF}"
 curl -fsSL https://www.nvidia.com/nemoclaw.sh -o /tmp/nemoclaw.sh
 bash /tmp/nemoclaw.sh --non-interactive --yes-i-accept-third-party-software --fresh
