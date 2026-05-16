@@ -154,10 +154,6 @@ start_host_proxy() {
 echo "OpenClaw dashboard:"
 SANDBOX_CONTAINER="$(sandbox_container)"
 if [ -n "$SANDBOX_CONTAINER" ]; then
-  if ! wait_for_docker_driver_dashboard "$SANDBOX_CONTAINER"; then
-    exit 1
-  fi
-
   "$SCRIPT_DIR/stop-dashboard-forward.sh" "$SANDBOX" >/dev/null 2>&1 || true
   recover_docker_driver_dashboard
 
@@ -170,11 +166,16 @@ if [ -n "$SANDBOX_CONTAINER" ]; then
       >/tmp/"${SANDBOX}-dashboard-proxy.log" 2>&1 &
   fi
 
-  wait_for_dashboard
+  if ! wait_for_dashboard; then
+    if docker_driver_dashboard_ready "$SANDBOX_CONTAINER"; then
+      echo "OpenClaw dashboard is running inside sandbox '$SANDBOX', but the host forward is not responding." >&2
+    fi
+    exit 1
+  fi
 
   cat <<EOF
 Dashboard URL: http://127.0.0.1:${LOCAL_PORT}/
-Forward: Docker-driver host network -> ${SANDBOX}:127.0.0.1:${REMOTE_PORT}
+Forward: Docker-driver host network -> ${SANDBOX} OpenClaw dashboard
 Browser launch disabled (--no-open). Use the URL above on this host.
 
 If your browser is on another machine, run this there first:
